@@ -4,8 +4,8 @@ IT Technician and Support Specialist based in Worthing, United Kingdom.
 
 I work in end-user support and hardware diagnostics — troubleshooting devices,
 networks and user accounts, and keeping the systems people rely on running.
-Currently providing IT support at Guild Care, alongside PAT testing and
-technical maintenance work.
+Currently at Guild Care, carrying out portable appliance testing alongside a
+customer-facing retail role.
 
 🌐 **[modern-portfolio.herocraft.xyz](https://modern-portfolio.herocraft.xyz)**
 
@@ -18,6 +18,7 @@ repair, PAT testing, audio/visual setup
 
 ### Background
 
+- Retail Assistant — Guild Care, Worthing *(2023 – present)*
 - IT Technician — Saywell International, Worthing *(2024)*
 - IT Technician — Worthing Homes, Worthing *(2024)*
 - IT Technician — Northbrook College, Worthing *(2021)*
