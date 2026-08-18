@@ -18,7 +18,7 @@ repair, PAT testing, audio/visual setup
 
 ### Background
 
-- Retail Assistant — Guild Care, Worthing *(2023 – present)*
+- Retail Assistant — Guild Care, Worthing *(Jul 2023 – present)*
 - IT Technician — Saywell International, Worthing *(2024)*
 - IT Technician — Worthing Homes, Worthing *(2024)*
 - IT Technician — Northbrook College, Worthing *(2021)*
