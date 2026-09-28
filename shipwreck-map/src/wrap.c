@@ -29,59 +29,95 @@ void setWorld(int mc, uint32_t lo, uint32_t hi, int isBedrock)
     bedrock = isBedrock;
 }
 
-// First two outputs of a standard MT19937 seeded with s.
-static void mt2(uint32_t s, uint32_t *a, uint32_t *b)
+// First n (at most 4) outputs of a standard MT19937 seeded with s.
+static void mtFirst(uint32_t s, uint32_t *out, int n)
 {
-    uint32_t m[399];
+    uint32_t m[401];
     m[0] = s;
-    for (int i = 1; i < 399; i++)
+    for (int i = 1; i < 397 + n; i++)
         m[i] = 1812433253u * (m[i-1] ^ (m[i-1] >> 30)) + i;
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < n; i++) {
         uint32_t y = (m[i] & 0x80000000u) | (m[i+1] & 0x7fffffffu);
         y = m[i+397] ^ (y >> 1) ^ ((y & 1) ? 0x9908b0dfu : 0);
         y ^= y >> 11;
         y ^= (y << 7) & 0x9d2c5680u;
         y ^= (y << 15) & 0xefc60000u;
         y ^= y >> 18;
-        if (i == 0) *a = y; else *b = y;
+        out[i] = y;
     }
 }
 
-// Bedrock Edition 1.18+: shipwrecks use 24-chunk regions with a 20-chunk
-// spread, placed by a Mersenne Twister seeded from the low 32 bits of the
-// world seed.
-static int bedrockShipwreckPos(uint64_t seed, int rx, int rz, Pos *p)
+enum { SHIPWRECK, OCEAN_RUIN, TREASURE };
+static const int CUBIOMES_TYPE[] = { Shipwreck, Ocean_Ruin, Treasure };
+
+// Bedrock Edition 1.18+ placement. Each structure has one attempt per region,
+// placed by a Mersenne Twister seeded from the low 32 bits of the world seed.
+static const struct { uint32_t salt; int spacing, range, triangular; } BEDROCK[] = {
+    [SHIPWRECK]  = { 165745295, 24, 20, 0 },
+    [OCEAN_RUIN] = {  14357621, 20, 12, 0 },
+    [TREASURE]   = {  16842397,  4,  2, 1 },
+};
+
+static void bedrockPos(int type, uint64_t seed, int rx, int rz, Pos *p)
 {
     uint32_t s = (uint32_t)seed + (uint32_t)rx * 2570712328u
-               + (uint32_t)rz * 4048968661u + 165745295u;
-    uint32_t a, b;
-    mt2(s, &a, &b);
-    p->x = (rx * 24 + (int)(a % 20)) * 16;
-    p->z = (rz * 24 + (int)(b % 20)) * 16;
-    return 1;
+               + (uint32_t)rz * 4048968661u + BEDROCK[type].salt;
+    uint32_t r[4];
+    int range = BEDROCK[type].range, x, z;
+    if (BEDROCK[type].triangular) {
+        mtFirst(s, r, 4);
+        x = (r[0] % range + r[1] % range) / 2;
+        z = (r[2] % range + r[3] % range) / 2;
+    } else {
+        mtFirst(s, r, 2);
+        x = r[0] % range;
+        z = r[1] % range;
+    }
+    p->x = (rx * BEDROCK[type].spacing + x) * 16 + 8;
+    p->z = (rz * BEDROCK[type].spacing + z) * 16 + 8;
 }
 
-// Shipwreck attempts in regions [rx0..rx1] x [rz0..rz1].
-// Writes x, z, viable, biome per shipwreck into out[]; returns the count.
+// Structure attempts of the given type in regions [rx0..rx1] x [rz0..rz1].
+// Writes x, z, viable, biome per structure into out[]; returns the count.
+// x and z are the block the structure centres on (chunk middle, or the exact
+// chest block for Java buried treasure).
 __attribute__((export_name("find")))
-int find(int rx0, int rz0, int rx1, int rz1)
+int find(int type, int rx0, int rz0, int rx1, int rz1)
 {
+    int st = CUBIOMES_TYPE[type];
     int n = 0;
     for (int rz = rz0; rz <= rz1; rz++)
     for (int rx = rx0; rx <= rx1; rx++) {
         Pos p;
-        if (bedrock ? !bedrockShipwreckPos(cur_seed, rx, rz, &p)
-                    : !getStructurePos(Shipwreck, cur_mc, cur_seed, rx, rz, &p))
-            continue;
+        if (bedrock) {
+            bedrockPos(type, cur_seed, rx, rz, &p);
+        } else {
+            if (!getStructurePos(st, cur_mc, cur_seed, rx, rz, &p))
+                continue;
+            if (type != TREASURE) {
+                p.x += 8;
+                p.z += 8;
+            }
+        }
         if (n >= 20000)
             return n;
         int *o = out + 4 * n++;
         o[0] = p.x;
         o[1] = p.z;
-        o[2] = isViableStructurePos(Shipwreck, &g, p.x, p.z, 0);
-        o[3] = getBiomeAt(&g, 4, (p.x + 8) >> 2, 16, (p.z + 8) >> 2);
+        o[2] = isViableStructurePos(st, &g, p.x & ~15, p.z & ~15, 0);
+        o[3] = getBiomeAt(&g, 4, p.x >> 2, 16, p.z >> 2);
     }
     return n;
+}
+
+__attribute__((export_name("regionChunks")))
+int regionChunks(int type)
+{
+    if (bedrock)
+        return BEDROCK[type].spacing;
+    StructureConfig sc;
+    getStructureConfig(CUBIOMES_TYPE[type], cur_mc, &sc);
+    return sc.regionSize;
 }
 
 __attribute__((export_name("outPtr")))

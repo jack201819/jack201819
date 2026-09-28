@@ -17,6 +17,10 @@
   --chip-ocean-ink: #1D4E63;
   --chip-beach: #F1E6C2;
   --chip-beach-ink: #6B5418;
+  --chip-ruin: #D3ECE8;
+  --chip-ruin-ink: #145C57;
+  --chip-gold: #F7E7B0;
+  --chip-gold-ink: #6A4B00;
   --shadow: 0 1px 2px rgba(22, 48, 58, .08), 0 6px 20px rgba(22, 48, 58, .08);
   --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
   --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
@@ -37,6 +41,10 @@
     --chip-ocean-ink: #A8D4E8;
     --chip-beach: #3A321B;
     --chip-beach-ink: #E9D49A;
+    --chip-ruin: #173B39;
+    --chip-ruin-ink: #9ADCD3;
+    --chip-gold: #3D3312;
+    --chip-gold-ink: #F2D675;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 20px rgba(0, 0, 0, .25);
   }
 }
@@ -54,6 +62,10 @@
   --chip-ocean-ink: #A8D4E8;
   --chip-beach: #3A321B;
   --chip-beach-ink: #E9D49A;
+  --chip-ruin: #173B39;
+  --chip-ruin-ink: #9ADCD3;
+  --chip-gold: #3D3312;
+  --chip-gold-ink: #F2D675;
   --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 20px rgba(0, 0, 0, .25);
 }
 
@@ -180,6 +192,15 @@ button:hover { filter: brightness(1.05); }
 .sw { width: 12px; height: 12px; display: inline-block; flex: none; }
 .sw.ocean { border-radius: 50%; background: #C4422A; box-shadow: 0 0 0 2px #fff; }
 .sw.beach { transform: rotate(45deg) scale(.8); background: #E0A826; box-shadow: 0 0 0 2px #5a3d0c; }
+.sw.ruin { transform: scale(.8); background: #1F8A84; box-shadow: 0 0 0 2px #fff; }
+.sw.treasure { position: relative; }
+.sw.treasure::before, .sw.treasure::after {
+  content: ""; position: absolute; left: -1px; top: 4px; width: 14px; height: 4px;
+  background: #F2C230; box-shadow: 0 0 0 1px #5A3D0C; border-radius: 1px;
+}
+.sw.treasure::before { transform: rotate(45deg); }
+.sw.treasure::after { transform: rotate(-45deg); }
+.legend .hint { color: #5A6F76; font-size: 11px; }
 .sw.fail { border-radius: 50%; border: 2px solid #6B7B80; background: transparent; }
 .loading {
   position: absolute; inset: 0; display: grid; place-items: center;
@@ -215,6 +236,11 @@ ol.wrecks li.sel { background: color-mix(in srgb, var(--accent) 8%, var(--panel)
 .pill { font: 600 11px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; border-radius: 999px; padding: 4px 8px; }
 .pill.ocean { background: var(--chip-ocean); color: var(--chip-ocean-ink); }
 .pill.beach { background: var(--chip-beach); color: var(--chip-beach-ink); }
+.pill.ruin { background: var(--chip-ruin); color: var(--chip-ruin-ink); }
+.pill.treasure { background: var(--chip-gold); color: var(--chip-gold-ink); }
+fieldset.layers { border: 0; margin: 0; padding: 0; flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; }
+fieldset.layers legend { float: left; margin-right: 4px; padding: 0; }
+fieldset.layers .check { padding-bottom: 0; }
 button.copy { font-size: 12px; padding: 6px 8px; }
 .empty { color: var(--muted); font-size: 14px; }
 
@@ -236,7 +262,7 @@ code { font-family: var(--mono); font-size: .92em; }
   <header>
     <div>
       <h1>Shipwreck <span>Chart</span></h1>
-      <p class="tag">Pick Java or Bedrock, then type your world seed to see every shipwreck it generates. Drag to pan, scroll or pinch to zoom, click a wreck for its coordinates.</p>
+      <p class="tag">Pick Java or Bedrock, then type your world seed to see every shipwreck, ocean ruin and buried treasure it generates. Drag to pan, scroll or pinch to zoom, click a marker for its coordinates.</p>
     </div>
     <div class="edition" id="editionTag">Java Edition · Overworld</div>
   </header>
@@ -263,7 +289,13 @@ code { font-family: var(--mono); font-size: .92em; }
       <div class="field coord"><label for="gz">Z</label><input type="text" id="gz" inputmode="numeric" value="0"></div>
       <button type="button" id="jump">Go to</button>
     </div>
-    <label class="check" for="showFail"><input type="checkbox" id="showFail"> Show spots where the biome blocks a wreck</label>
+    <fieldset class="layers">
+      <legend class="label">Show</legend>
+      <label class="check" for="lay0"><input type="checkbox" id="lay0" checked> Shipwrecks</label>
+      <label class="check" for="lay1"><input type="checkbox" id="lay1" checked> Ocean ruins</label>
+      <label class="check" for="lay2"><input type="checkbox" id="lay2" checked> Buried treasure</label>
+      <label class="check" for="showFail"><input type="checkbox" id="showFail"> Spots where the biome blocks it</label>
+    </fieldset>
   </form>
 
   <p class="status" id="status">Preparing the world generator…</p>
@@ -272,9 +304,11 @@ code { font-family: var(--mono); font-size: .92em; }
     <div class="map" id="map">
       <canvas id="canvas" aria-label="Map of the world with shipwreck markers"></canvas>
       <div class="legend">
-        <div><span class="sw ocean"></span>Ocean wreck</div>
-        <div><span class="sw beach"></span>Beached wreck</div>
-        <div id="failKey" hidden><span class="sw fail"></span>No wreck (wrong biome)</div>
+        <div id="key0a"><span class="sw ocean"></span>Shipwreck</div>
+        <div id="key0b"><span class="sw beach"></span>Beached shipwreck</div>
+        <div id="key1"><span class="sw ruin"></span>Ocean ruin</div>
+        <div id="key2"><span class="sw treasure"></span>Buried treasure <span class="hint" id="treasureHint" hidden>(zoom in)</span></div>
+        <div id="failKey" hidden><span class="sw fail"></span>Nothing (wrong biome)</div>
       </div>
       <div class="zoom">
         <button type="button" id="zin" aria-label="Zoom in">+</button>
@@ -286,7 +320,7 @@ code { font-family: var(--mono); font-size: .92em; }
 
     <aside>
       <div>
-        <h2>Nearest wrecks</h2>
+        <h2>Nearest finds</h2>
         <p class="sub" id="nearSub">to the map centre</p>
       </div>
       <ol class="wrecks" id="list"></ol>
@@ -294,10 +328,11 @@ code { font-family: var(--mono); font-size: .92em; }
   </div>
 
   <div class="notes">
-    <p><b>Where to dig.</b> Coordinates point at the middle of the chunk the wreck starts in. The hull can stretch into neighbouring chunks, and ocean wrecks rest on the sea floor, so bring a boat and look down.</p>
+    <p><b>Wrecks and ruins.</b> Coordinates point at the middle of the chunk the structure starts in. Hulls and ruins can stretch into neighbouring chunks and rest on the sea floor, so bring a boat and look down.</p>
+    <p><b>Buried treasure</b> only appears when you zoom in, because there are so many. In Java the coordinates are the exact chest block: stand there and dig straight down through the sand. In Bedrock they are the middle of the chunk, so dig around that spot.</p>
     <p><b>Beached wrecks</b> generate on beach biomes and sit above water. Their map chest often points to buried treasure nearby.</p>
     <p><b>How it works.</b> Positions and biomes come from <a href="https://github.com/Cubitect/cubiomes" target="_blank" rel="noopener">cubiomes</a>, a C recreation of Minecraft's world generation, compiled to run in your browser. Nothing is sent anywhere.</p>
-    <p><b>Java or Bedrock.</b> Pick the edition your world was made in. The two editions share biomes since 1.18 but place shipwrecks differently, so the same seed gives different wrecks. Bedrock is supported from 1.18 on. In Java, text seeds are converted the same way the game does it.</p>
+    <p><b>Java or Bedrock.</b> Pick the edition your world was made in. The two editions share biomes since 1.18 but place structures differently, so the same seed gives different results. Bedrock is supported from 1.18 on. In Java, text seeds are converted the same way the game does it.</p>
     <p><b>Finding a Bedrock seed.</b> Open the world, go to Settings, then Game, and copy the number under Seed. Paste that number here, not the text you typed when you created the world.</p>
   </div>
 </div>
@@ -321,9 +356,9 @@ function run() {
       for (let i = 0; i < ids.length; i++) ids[i] = src[i] & 255;
       postMessage({ type: 'tile', gen, key: job.key, ids }, [ids.buffer]);
     } else if (job.type === 'wrecks') {
-      const n = e.find(job.rx0, job.rz0, job.rx1, job.rz1);
+      const n = e.find(job.t, job.rx0, job.rz0, job.rx1, job.rz1);
       const data = new Int32Array(e.memory.buffer, e.outPtr(), n * 4).slice();
-      postMessage({ type: 'wrecks', gen, key: job.key, data }, [data.buffer]);
+      postMessage({ type: 'wrecks', gen, key: job.key, t: job.t, data }, [data.buffer]);
     }
   }
   if (queue.length) { busy = true; setTimeout(run, 0); }
@@ -347,9 +382,11 @@ onmessage = async (m) => {
     queue = d.jobs.map((j) => ({ ...j, gen: d.gen }));
     if (!busy && queue.length) { busy = true; setTimeout(run, 0); }
   } else if (d.type === 'nearest') {
-    const n = e.find(d.rx0, d.rz0, d.rx1, d.rz1);
-    const data = new Int32Array(e.memory.buffer, e.outPtr(), n * 4).slice();
-    postMessage({ type: 'nearest', gen: d.gen, id: d.id, data, x: d.x, z: d.z }, [data.buffer]);
+    const results = d.queries.map((q) => {
+      const n = e.find(q.t, q.rx0, q.rz0, q.rx1, q.rz1);
+      return { t: q.t, data: new Int32Array(e.memory.buffer, e.outPtr(), n * 4).slice() };
+    });
+    postMessage({ type: 'nearest', gen: d.gen, id: d.id, results, x: d.x, z: d.z });
   }
 };
 </script>
@@ -470,17 +507,28 @@ onmessage = async (m) => {
   const view = { cx: 0, cz: 0, ppb: 1 / 4 }; // centre in blocks, pixels per block
   let W = 0, H = 0, dpr = 1;
   let gen = 0;
-  let world = null;         // { seed, mc, regionBlocks }
+  let world = null;         // { seed, mc, bedrock }
   const tiles = new Map();  // key -> { bmp, ids, scale, tx, tz }
-  const wrecks = new Map(); // key -> Int32Array (x, z, viable, biome)*
+  const wrecks = new Map(); // key -> { t, data: Int32Array (x, z, viable, biome)* }
   let selected = null;      // { x, z }
   let nearest = [];
   let nearId = 0;
   let dirty = true;
   const worker = new Worker(URL.createObjectURL(new Blob([$('worker-src').textContent], { type: 'text/javascript' })));
 
-  const REGION_CHUNKS = (mc, bedrock) => (!bedrock && mc <= 2 ? 16 : 24);
-  const WB = 8; // regions per wreck request block
+  // Structure types, matching the ids in wrap.c.
+  const WRECK = 0, RUIN = 1, TREASURE = 2;
+  const TYPES = [WRECK, RUIN, TREASURE];
+  const TREASURE_MIN_ZOOM = 1 / 12; // treasure is dense, so only show it zoomed in
+  const layerOn = (t) => $('lay' + t).checked;
+  const typeVisible = (t) => layerOn(t) && (t !== TREASURE || view.ppb >= TREASURE_MIN_ZOOM);
+  function regionChunks(t) {
+    if (world.bedrock) return [24, 20, 4][t];
+    if (t === TREASURE) return 1;
+    return world.mc <= 2 ? 16 : [24, 20][t];
+  }
+  // Regions per request block, so each block covers roughly 3000 blocks.
+  const regionsPerBlock = (t) => Math.max(1, Math.round(3072 / (regionChunks(t) * 16)));
   const SCALES = [4, 16, 64, 256];
   const pickScale = () => SCALES.find((s) => s * view.ppb >= 1.5) || 256;
 
@@ -505,18 +553,20 @@ onmessage = async (m) => {
         dirty = true;
       });
     } else if (d.type === 'wrecks') {
-      wrecks.set(d.key, d.data);
+      wrecks.set(d.key, { t: d.t, data: d.data });
       dirty = true;
     } else if (d.type === 'nearest') {
       if (d.id !== nearId) return;
       const out = [];
-      for (let i = 0; i < d.data.length; i += 4) {
-        if (!d.data[i + 2]) continue;
-        const x = d.data[i] + 8, z = d.data[i + 1] + 8;
-        out.push({ x, z, beach: BEACHES.has(d.data[i + 3]), dist: Math.hypot(x - d.x, z - d.z) });
+      for (const { t, data } of d.results) {
+        for (let i = 0; i < data.length; i += 4) {
+          if (!data[i + 2]) continue;
+          const x = data[i], z = data[i + 1];
+          out.push({ t, x, z, beach: t === WRECK && BEACHES.has(data[i + 3]), dist: Math.hypot(x - d.x, z - d.z) });
+        }
       }
       out.sort((a, b) => a.dist - b.dist);
-      nearest = out.slice(0, 10);
+      nearest = out.slice(0, 12);
       $('nearSub').textContent = `to X ${Math.round(d.x)}, Z ${Math.round(d.z)} (map centre)`;
       renderList();
     }
@@ -533,15 +583,18 @@ onmessage = async (m) => {
     wantTimer = setTimeout(() => {
       if (!world) return;
       const jobs = [];
-      // Shipwreck blocks first: they are cheap and are what people came for.
-      const rb = world.regionBlocks * WB;
+      // Structure blocks first: they are cheap and are what people came for.
       const r = visibleRect(64);
-      const bx0 = Math.floor(r.x0 / rb), bx1 = Math.floor(r.x1 / rb);
-      const bz0 = Math.floor(r.z0 / rb), bz1 = Math.floor(r.z1 / rb);
-      if ((bx1 - bx0 + 1) * (bz1 - bz0 + 1) <= 400) {
+      for (const t of TYPES) {
+        if (!typeVisible(t)) continue;
+        const WB = regionsPerBlock(t);
+        const rb = regionChunks(t) * 16 * WB;
+        const bx0 = Math.floor(r.x0 / rb), bx1 = Math.floor(r.x1 / rb);
+        const bz0 = Math.floor(r.z0 / rb), bz1 = Math.floor(r.z1 / rb);
+        if ((bx1 - bx0 + 1) * (bz1 - bz0 + 1) > 400) continue;
         for (let bz = bz0; bz <= bz1; bz++) for (let bx = bx0; bx <= bx1; bx++) {
-          const key = bx + ':' + bz;
-          if (!wrecks.has(key)) jobs.push({ type: 'wrecks', key, rx0: bx * WB, rz0: bz * WB, rx1: bx * WB + WB - 1, rz1: bz * WB + WB - 1 });
+          const key = t + ':' + bx + ':' + bz;
+          if (!wrecks.has(key)) jobs.push({ type: 'wrecks', t, key, rx0: bx * WB, rz0: bz * WB, rx1: bx * WB + WB - 1, rz1: bz * WB + WB - 1 });
         }
       }
       // Biome tiles, nearest the centre first.
@@ -565,9 +618,15 @@ onmessage = async (m) => {
     clearTimeout(nearTimer);
     nearTimer = setTimeout(() => {
       if (!world) return;
-      const rb = world.regionBlocks, R = 8;
-      const rx = Math.floor(view.cx / rb), rz = Math.floor(view.cz / rb);
-      worker.postMessage({ type: 'nearest', gen, id: ++nearId, x: view.cx, z: view.cz, rx0: rx - R, rz0: rz - R, rx1: rx + R, rz1: rz + R });
+      const queries = [];
+      for (const t of TYPES) {
+        if (!layerOn(t)) continue;
+        const rb = regionChunks(t) * 16;
+        const R = Math.ceil((t === TREASURE ? 1600 : 3000) / rb);
+        const rx = Math.floor(view.cx / rb), rz = Math.floor(view.cz / rb);
+        queries.push({ t, rx0: rx - R, rz0: rz - R, rx1: rx + R, rz1: rz + R });
+      }
+      worker.postMessage({ type: 'nearest', gen, id: ++nearId, x: view.cx, z: view.cz, queries });
     }, 250);
   }
 
@@ -589,7 +648,7 @@ onmessage = async (m) => {
     selected = null;
     nearest = [];
     renderList();
-    world = { seed, mc, bedrock, regionBlocks: REGION_CHUNKS(mc, bedrock) * 16 };
+    world = { seed, mc, bedrock };
     const u = BigInt.asUintN(64, seed);
     worker.postMessage({ type: 'world', gen, mc, bedrock, lo: Number(u & 0xffffffffn) | 0, hi: Number(u >> 32n) | 0 });
     store.set('shipwreck.seed', seedIn.value.trim());
@@ -607,6 +666,7 @@ onmessage = async (m) => {
       else statusEl.append(p);
     });
     $('loading').hidden = true;
+    updateLegend();
     dirty = true;
     requestData();
     requestNearest();
@@ -686,13 +746,15 @@ onmessage = async (m) => {
     ctx.moveTo(ox, oz - 8); ctx.lineTo(ox, oz + 8);
     ctx.stroke();
 
-    // Shipwrecks.
+    // Structures: treasure underneath, then ruins, then shipwrecks on top.
     const failOn = showFail.checked;
     const big = view.ppb >= 1 / 8;
     const rad = big ? 6 : view.ppb >= 1 / 24 ? 4 : 2.5;
-    wrecks.forEach((d) => {
+    const byType = [[], [], []];
+    wrecks.forEach((w) => { if (typeVisible(w.t)) byType[w.t].push(w.data); });
+    for (const t of [TREASURE, RUIN, WRECK]) for (const d of byType[t]) {
       for (let i = 0; i < d.length; i += 4) {
-        const x = d[i] + 8, z = d[i + 1] + 8;
+        const x = d[i], z = d[i + 1];
         if (x < r.x0 - 64 || x > r.x1 + 64 || z < r.z0 - 64 || z > r.z1 + 64) continue;
         const [sx, sy] = toScreen(x, z);
         if (!d[i + 2]) {
@@ -702,7 +764,22 @@ onmessage = async (m) => {
           ctx.beginPath(); ctx.arc(sx, sy, rad - 1, 0, Math.PI * 2); ctx.stroke();
           continue;
         }
-        if (BEACHES.has(d[i + 3])) {
+        if (t === TREASURE) {
+          const q = rad * .9;
+          ctx.lineCap = 'round';
+          for (const [w, c] of [[big ? 5 : 4, '#5A3D0C'], [big ? 2.5 : 2, '#F2C230']]) {
+            ctx.lineWidth = w; ctx.strokeStyle = c;
+            ctx.beginPath();
+            ctx.moveTo(sx - q, sy - q); ctx.lineTo(sx + q, sy + q);
+            ctx.moveTo(sx + q, sy - q); ctx.lineTo(sx - q, sy + q);
+            ctx.stroke();
+          }
+          ctx.lineCap = 'butt';
+        } else if (t === RUIN) {
+          const q = rad * .8;
+          ctx.fillStyle = '#1F8A84'; ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = big ? 2 : 1.25;
+          ctx.fillRect(sx - q, sy - q, q * 2, q * 2); ctx.strokeRect(sx - q, sy - q, q * 2, q * 2);
+        } else if (BEACHES.has(d[i + 3])) {
           ctx.save();
           ctx.translate(sx, sy); ctx.rotate(Math.PI / 4);
           ctx.fillStyle = '#E0A826'; ctx.strokeStyle = '#5A3D0C'; ctx.lineWidth = 1.5;
@@ -714,7 +791,7 @@ onmessage = async (m) => {
           ctx.beginPath(); ctx.arc(sx, sy, rad, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
         }
       }
-    });
+    }
 
     if (selected) {
       const [sx, sy] = toScreen(selected.x, selected.z);
@@ -765,7 +842,7 @@ onmessage = async (m) => {
     view.cz = wz - (sy - H / 2) / view.ppb;
     changed();
   }
-  function changed() { dirty = true; requestData(); requestNearest(); }
+  function changed() { dirty = true; updateLegend(); requestData(); requestNearest(); }
   const local = (ev) => { const r = canvas.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; };
 
   canvas.addEventListener('pointerdown', (ev) => {
@@ -819,10 +896,11 @@ onmessage = async (m) => {
   function pick(sx, sy) {
     let best = null, bestD = 14;
     const failOn = showFail.checked;
-    wrecks.forEach((d) => {
+    wrecks.forEach(({ t, data: d }) => {
+      if (!typeVisible(t)) return;
       for (let i = 0; i < d.length; i += 4) {
         if (!d[i + 2] && !failOn) continue;
-        const x = d[i] + 8, z = d[i + 1] + 8;
+        const x = d[i], z = d[i + 1];
         const [px, py] = toScreen(x, z);
         const dd = Math.hypot(px - sx, py - sy);
         if (dd < bestD) { bestD = dd; best = { x, z, ok: !!d[i + 2] }; }
@@ -846,7 +924,7 @@ onmessage = async (m) => {
     if (!nearest.length) {
       const li = document.createElement('p');
       li.className = 'empty';
-      li.textContent = 'Searching nearby…';
+      li.textContent = TYPES.some(layerOn) ? 'Searching nearby…' : 'Turn on a layer above to list what is nearby.';
       listEl.append(li);
       return;
     }
@@ -870,8 +948,11 @@ onmessage = async (m) => {
       const meta = document.createElement('div');
       meta.className = 'meta';
       const pill = document.createElement('span');
-      pill.className = 'pill ' + (w.beach ? 'beach' : 'ocean');
-      pill.textContent = w.beach ? 'Beached' : 'Ocean';
+      const [cls, name] = w.t === TREASURE ? ['treasure', 'Treasure']
+        : w.t === RUIN ? ['ruin', 'Ocean ruin']
+        : w.beach ? ['beach', 'Beached wreck'] : ['ocean', 'Shipwreck'];
+      pill.className = 'pill ' + cls;
+      pill.textContent = name;
       const dist = document.createElement('span');
       dist.className = 'dist';
       dist.textContent = `${Math.round(w.dist).toLocaleString()} blocks away`;
@@ -905,6 +986,13 @@ onmessage = async (m) => {
     goTo(x, z, false);
   });
   showFail.addEventListener('change', () => { $('failKey').hidden = !showFail.checked; dirty = true; });
+  function updateLegend() {
+    $('key0a').hidden = $('key0b').hidden = !layerOn(WRECK);
+    $('key1').hidden = !layerOn(RUIN);
+    $('key2').hidden = !layerOn(TREASURE);
+    $('treasureHint').hidden = view.ppb >= TREASURE_MIN_ZOOM;
+  }
+  for (const t of TYPES) $('lay' + t).addEventListener('change', () => { updateLegend(); changed(); });
   new ResizeObserver(resize).observe(mapEl);
 
   // ---------- Boot ----------
