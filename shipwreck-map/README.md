@@ -1,13 +1,19 @@
 # Shipwreck Chart
 
-A single-page map of Minecraft **Java Edition** shipwrecks for any seed.
+A single-page map of Minecraft shipwrecks for any **Java** or **Bedrock** seed.
 Open `index.html` in a browser, type your seed, and pan/zoom around.
 
 - Wreck positions and biomes come from [cubiomes](https://github.com/Cubitect/cubiomes),
   compiled to WebAssembly and embedded in the page, so it works offline.
 - Sites that fail the biome check (no wreck actually spawns) are hidden by default.
 - Beached wrecks (on beach biomes) are marked separately from ocean wrecks.
-- Supports 1.13 through 1.21+. Bedrock Edition is not supported.
+- Java: 1.13 through 1.21+. Bedrock: 1.18 through 1.21+.
+- Bedrock placement uses a Mersenne Twister seeded with
+  `low32(seed) + rx*2570712328 + rz*4048968661 + 165745295` and a 24-chunk region
+  with a 20-chunk spread. It was checked against the open-source
+  [SeedFinder](https://github.com/zebedelu/SeedFinder) Bedrock finder, and the constants match
+  [MCBE-seedcracker](https://github.com/Alist2930/MCBE-seedcracker). Since 1.18, Bedrock biomes
+  match Java biomes for the same seed, so the same biome check applies.
 
 ## Rebuilding
 

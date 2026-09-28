@@ -1,5 +1,5 @@
 <title>Shipwreck Chart</title>
-<meta name="description" content="Enter a Minecraft Java Edition seed and see where every shipwreck generates.">
+<meta name="description" content="Enter a Minecraft Java or Bedrock seed and see where every shipwreck generates.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -236,9 +236,9 @@ code { font-family: var(--mono); font-size: .92em; }
   <header>
     <div>
       <h1>Shipwreck <span>Chart</span></h1>
-      <p class="tag">Type your world seed to see every shipwreck it generates. Drag to pan, scroll or pinch to zoom, click a wreck for its coordinates.</p>
+      <p class="tag">Pick Java or Bedrock, then type your world seed to see every shipwreck it generates. Drag to pan, scroll or pinch to zoom, click a wreck for its coordinates.</p>
     </div>
-    <div class="edition">Java Edition · Overworld</div>
+    <div class="edition" id="editionTag">Java Edition · Overworld</div>
   </header>
 
   <form class="controls" id="controls" autocomplete="off">
@@ -247,18 +247,15 @@ code { font-family: var(--mono); font-size: .92em; }
       <input type="text" id="seed" spellcheck="false" placeholder="e.g. -4172144997902289642 or a word">
     </div>
     <div class="field">
-      <label for="version">Version</label>
-      <select id="version">
-        <option value="8" selected>1.21 and newer</option>
-        <option value="7">1.20</option>
-        <option value="6">1.19</option>
-        <option value="5">1.18</option>
-        <option value="4">1.17</option>
-        <option value="3">1.16</option>
-        <option value="2">1.15</option>
-        <option value="1">1.14</option>
-        <option value="0">1.13</option>
+      <label for="edition">Edition</label>
+      <select id="edition">
+        <option value="java" selected>Java</option>
+        <option value="bedrock">Bedrock</option>
       </select>
+    </div>
+    <div class="field">
+      <label for="version">Version</label>
+      <select id="version"></select>
     </div>
     <button class="primary" type="submit" id="go">Chart seed</button>
     <div class="coords">
@@ -300,7 +297,8 @@ code { font-family: var(--mono); font-size: .92em; }
     <p><b>Where to dig.</b> Coordinates point at the middle of the chunk the wreck starts in. The hull can stretch into neighbouring chunks, and ocean wrecks rest on the sea floor, so bring a boat and look down.</p>
     <p><b>Beached wrecks</b> generate on beach biomes and sit above water. Their map chest often points to buried treasure nearby.</p>
     <p><b>How it works.</b> Positions and biomes come from <a href="https://github.com/Cubitect/cubiomes" target="_blank" rel="noopener">cubiomes</a>, a C recreation of Minecraft's world generation, compiled to run in your browser. Nothing is sent anywhere.</p>
-    <p><b>Bedrock Edition</b> places structures differently, so this chart only matches Java Edition worlds. Text seeds are converted the same way the game does it.</p>
+    <p><b>Java or Bedrock.</b> Pick the edition your world was made in. The two editions share biomes since 1.18 but place shipwrecks differently, so the same seed gives different wrecks. Bedrock is supported from 1.18 on. In Java, text seeds are converted the same way the game does it.</p>
+    <p><b>Finding a Bedrock seed.</b> Open the world, go to Settings, then Game, and copy the number under Seed. Paste that number here, not the text you typed when you created the world.</p>
   </div>
 </div>
 
@@ -343,7 +341,7 @@ onmessage = async (m) => {
   } else if (d.type === 'world') {
     gen = d.gen;
     queue = [];
-    e.setWorld(e.mcVersion(d.mc), d.lo, d.hi);
+    e.setWorld(e.mcVersion(d.mc), d.lo, d.hi, d.bedrock ? 1 : 0);
   } else if (d.type === 'want') {
     if (d.gen !== gen) return;
     queue = d.jobs.map((j) => ({ ...j, gen: d.gen }));
@@ -430,7 +428,7 @@ onmessage = async (m) => {
 
   // ---------- Seed parsing (matches Java's world creation screen) ----------
   const MIN64 = -(1n << 63n), MAX64 = (1n << 63n) - 1n;
-  function parseSeed(text) {
+  function parseSeed(text, bedrock) {
     const s = text.trim();
     if (!s) {
       const r = crypto.getRandomValues(new Uint32Array(2));
@@ -440,6 +438,7 @@ onmessage = async (m) => {
       const v = BigInt(s);
       if (v >= MIN64 && v <= MAX64) return { seed: v, kind: 'number' };
     }
+    if (bedrock) return { seed: 0n, kind: 'invalid' };
     let h = 0;
     for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
     return { seed: BigInt(h), kind: 'text' };
@@ -449,7 +448,18 @@ onmessage = async (m) => {
   const $ = (id) => document.getElementById(id);
   const canvas = $('canvas'), ctx = canvas.getContext('2d');
   const mapEl = $('map'), statusEl = $('status'), listEl = $('list'), readout = $('readout');
-  const seedIn = $('seed'), verIn = $('version'), showFail = $('showFail');
+  const seedIn = $('seed'), verIn = $('version'), edIn = $('edition'), showFail = $('showFail');
+  const VERSIONS = {
+    java: [['8', '1.21 and newer'], ['7', '1.20'], ['6', '1.19'], ['5', '1.18'], ['4', '1.17'], ['3', '1.16'], ['2', '1.15'], ['1', '1.14'], ['0', '1.13']],
+    bedrock: [['8', '1.21 and newer'], ['7', '1.20'], ['6', '1.19'], ['5', '1.18']],
+  };
+  function fillVersions(keep) {
+    const list = VERSIONS[edIn.value];
+    verIn.textContent = '';
+    for (const [v, t] of list) verIn.append(new Option(t, v));
+    verIn.value = list.some(([v]) => v === keep) ? keep : list[0][0];
+    $('editionTag').textContent = (edIn.value === 'bedrock' ? 'Bedrock' : 'Java') + ' Edition · Overworld';
+  }
 
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -469,7 +479,7 @@ onmessage = async (m) => {
   let dirty = true;
   const worker = new Worker(URL.createObjectURL(new Blob([$('worker-src').textContent], { type: 'text/javascript' })));
 
-  const REGION_CHUNKS = (mc) => (mc <= 2 ? 16 : 24);
+  const REGION_CHUNKS = (mc, bedrock) => (!bedrock && mc <= 2 ? 16 : 24);
   const WB = 8; // regions per wreck request block
   const SCALES = [4, 16, 64, 256];
   const pickScale = () => SCALES.find((s) => s * view.ppb >= 1.5) || 256;
@@ -563,7 +573,13 @@ onmessage = async (m) => {
 
   // ---------- World setup ----------
   function chart() {
-    const { seed, kind } = parseSeed(seedIn.value);
+    const bedrock = edIn.value === 'bedrock';
+    const { seed, kind } = parseSeed(seedIn.value, bedrock);
+    if (kind === 'invalid') {
+      statusEl.classList.add('error');
+      statusEl.textContent = 'Bedrock needs the number form of the seed. Open the world, go to Settings, then Game, and copy the number under Seed.';
+      return;
+    }
     if (kind === 'random') seedIn.value = seed.toString();
     const mc = Number(verIn.value);
     gen++;
@@ -573,17 +589,18 @@ onmessage = async (m) => {
     selected = null;
     nearest = [];
     renderList();
-    world = { seed, mc, regionBlocks: REGION_CHUNKS(mc) * 16 };
+    world = { seed, mc, bedrock, regionBlocks: REGION_CHUNKS(mc, bedrock) * 16 };
     const u = BigInt.asUintN(64, seed);
-    worker.postMessage({ type: 'world', gen, mc, lo: Number(u & 0xffffffffn) | 0, hi: Number(u >> 32n) | 0 });
+    worker.postMessage({ type: 'world', gen, mc, bedrock, lo: Number(u & 0xffffffffn) | 0, hi: Number(u >> 32n) | 0 });
     store.set('shipwreck.seed', seedIn.value.trim());
     store.set('shipwreck.version', verIn.value);
-    const ver = verIn.options[verIn.selectedIndex].text;
+    store.set('shipwreck.edition', edIn.value);
+    const ver = (bedrock ? 'Bedrock ' : 'Java ') + verIn.options[verIn.selectedIndex].text;
     statusEl.classList.remove('error');
     statusEl.innerHTML = '';
     const parts = kind === 'text'
-      ? ['Text seed “', seedIn.value.trim(), '” is world seed ', seed.toString(), ` · Java ${ver}`]
-      : [kind === 'random' ? 'Random seed ' : 'Seed ', seed.toString(), ` · Java ${ver}`];
+      ? ['Text seed “', seedIn.value.trim(), '” is world seed ', seed.toString(), ` · ${ver}`]
+      : [kind === 'random' ? 'Random seed ' : 'Seed ', seed.toString(), ` · ${ver}`];
     parts.forEach((p, i) => {
       const isNum = p === seed.toString() || (kind === 'text' && i === 1);
       if (isNum) { const b = document.createElement('b'); b.textContent = p; statusEl.append(b); }
@@ -877,6 +894,7 @@ onmessage = async (m) => {
     chart();
   });
   verIn.addEventListener('change', () => chart());
+  edIn.addEventListener('change', () => { fillVersions(verIn.value); chart(); });
   $('jump').addEventListener('click', () => {
     const x = Number($('gx').value), z = Number($('gz').value);
     if (!Number.isFinite(x) || !Number.isFinite(z)) {
@@ -892,8 +910,9 @@ onmessage = async (m) => {
   // ---------- Boot ----------
   function start() {
     seedIn.value = store.get('shipwreck.seed') ?? '-4172144997902289642';
-    const v = store.get('shipwreck.version');
-    if (v !== null && verIn.querySelector(`option[value="${v}"]`)) verIn.value = v;
+    const ed = store.get('shipwreck.edition');
+    if (ed === 'bedrock' || ed === 'java') edIn.value = ed;
+    fillVersions(store.get('shipwreck.version'));
     resize();
     chart();
     requestAnimationFrame(loop);
