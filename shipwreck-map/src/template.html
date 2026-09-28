@@ -324,6 +324,7 @@ code { font-family: var(--mono); font-size: .92em; }
         <p class="sub" id="nearSub">to the map centre</p>
       </div>
       <ol class="wrecks" id="list"></ol>
+      <p class="sub" id="tpNote"></p>
     </aside>
   </div>
 
@@ -667,6 +668,7 @@ onmessage = async (m) => {
     });
     $('loading').hidden = true;
     updateLegend();
+    tpNote();
     dirty = true;
     requestData();
     requestNearest();
@@ -937,12 +939,12 @@ onmessage = async (m) => {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'copy';
-      btn.textContent = 'Copy /tp';
-      const cmd = `/tp @s ${w.x} ~ ${w.z}`;
+      btn.textContent = 'Copy tp';
+      const cmd = tpCommand(w.x, w.z);
       btn.title = cmd;
       btn.addEventListener('click', (ev) => {
         ev.stopPropagation();
-        const done = () => { btn.textContent = 'Copied'; setTimeout(() => (btn.textContent = 'Copy /tp'), 1400); };
+        const done = () => { btn.textContent = 'Copied'; setTimeout(() => (btn.textContent = 'Copy tp'), 1400); };
         navigator.clipboard?.writeText(cmd).then(done, () => { xz.textContent = cmd; selectText(xz); });
       });
       const meta = document.createElement('div');
@@ -961,6 +963,20 @@ onmessage = async (m) => {
       li.addEventListener('click', () => { selected = { x: w.x, z: w.z }; goTo(w.x, w.z, true); renderList(); });
       listEl.append(li);
     }
+  }
+  // A teleport that never leaves you inside terrain. Java 1.19.4+ can read the
+  // heightmap, which puts you on top of the ground or the water surface.
+  // Elsewhere, go to Y 80; Bedrock's checkForBlocks refuses a blocked spot.
+  function tpCommand(x, z) {
+    if (!world.bedrock && world.mc >= 7) return `/execute positioned ${x} 0 ${z} positioned over motion_blocking run tp @s ~ ~ ~`;
+    return world.bedrock ? `/tp @s ${x} 80 ${z} true` : `/tp @s ${x} 80 ${z}`;
+  }
+  function tpNote() {
+    $('tpNote').textContent = !world.bedrock && world.mc >= 7
+      ? 'Copy tp puts you on the surface at that spot: on the water or on the ground.'
+      : world.bedrock
+        ? 'Copy tp takes you to Y 80 above the spot and refuses if blocks are in the way. You drop from there, so fly or use Creative on land.'
+        : 'Copy tp takes you to Y 80 above the spot. You drop from there, so fly or use Creative on land.';
   }
   function selectText(el) {
     const range = document.createRange();
