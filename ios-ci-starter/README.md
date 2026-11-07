@@ -1,103 +1,106 @@
-# iOS CI starter — build for iOS 27 without owning a Mac
+# iOS CI starter — build and run on your iPhone with no Mac and no paid account
 
-Write Swift on Windows, build on GitHub's Apple Silicon runners, install on your
-iPhone through TestFlight. No Mac, no Xcode locally, no VM.
+Write Swift on Windows → build on GitHub's Apple Silicon runners → sideload onto
+your iPhone with Sideloadly using a **free** Apple ID.
 
-## Why it's shaped this way
+No Mac. No Xcode locally. No $99 Apple Developer Program. No Hyper-V VM.
+
+## How it fits together
+
+```
+Windows (edit Swift)  →  GitHub Actions (xcode-27 runner)  →  unsigned .ipa artifact
+                                                                      ↓
+                              iPhone (iOS 27)  ←  Sideloadly on Windows (free Apple ID)
+```
 
 - **No `.xcodeproj` in git.** `project.yml` is an [XcodeGen](https://github.com/yonaskolb/XcodeGen)
-  spec; CI generates the project. Creating or editing an `.xcodeproj` normally
-  requires Xcode — this removes that requirement entirely.
-- **No certificates to export.** Signing uses an App Store Connect **API key**
-  with `-allowProvisioningUpdates`, so Xcode creates and fetches the
-  distribution certificate and profile on the runner. The usual
-  "export a .p12 from Keychain Access" step needs a Mac; this doesn't.
-- **`runs-on: xcode-27`** is the GitHub-hosted Apple Silicon image carrying
-  Xcode 27 and the iOS 27 SDK. (`macos-26` does *not* include Xcode 27.)
+  spec; CI generates the project. Editing an `.xcodeproj` normally needs Xcode —
+  this removes that requirement.
+- **No signing in CI.** The build is unsigned, so the workflow needs **zero
+  secrets**. Signing happens on your PC, with your free Apple ID, at install time.
+- **`runs-on: xcode-27`** is GitHub's Apple Silicon image with Xcode 27 and the
+  iOS 27 SDK. (`macos-26` does *not* include Xcode 27.)
 
 ## Setup
 
 ### 1. Move these files into your app repo
 
-Copy the contents of this folder to the repo root, so the workflow sits at
+Copy this folder's contents to the repo root so the workflow lands at
 `.github/workflows/ios.yml`. It's nested here only to keep it from running in
 the repo it was delivered in.
 
-### 2. Apple Developer Program
+That's the entire CI setup. No secrets, no variables, no Apple account.
+Optionally set repository variables `BUNDLE_ID` and `BUNDLE_ID_PREFIX`;
+the defaults build fine.
 
-You need a paid membership ($99/yr) — TestFlight is not available on a free
-Apple ID. Note your **Team ID** from
-<https://developer.apple.com/account> → Membership.
+### 2. Get the IPA
 
-### 3. Create an App Store Connect API key
+Push to `main` (or run the workflow manually) → Actions → the run →
+**Artifacts** → `App-ipa-<n>`. Unzip it to get `App-<n>.ipa`.
 
-<https://appstoreconnect.apple.com> → Users and Access → Integrations → App Store Connect API
+### 3. Install it with Sideloadly
 
-- Role: **App Manager** (needs to create certificates and upload builds)
-- Download the `.p8` **once** — Apple will not let you download it again
-- Note the **Key ID** and **Issuer ID**
+1. Install [iTunes](https://www.apple.com/itunes/download/win64) (needed for
+   Apple's USB drivers) and [Sideloadly](https://sideloadly.io) on Windows.
+2. Plug the iPhone in, trust the computer.
+3. Drag the `.ipa` into Sideloadly, enter your **free** Apple ID, hit Start.
+4. On the phone: Settings → General → VPN & Device Management → trust your
+   developer profile. Then launch the app.
 
-### 4. Register the app
+Use an app-specific password if your Apple ID has 2FA
+(<https://appleid.apple.com> → Sign-In and Security → App-Specific Passwords).
 
-App Store Connect → Apps → **+** → New App. The bundle ID must match what you
-set in step 6. The app record must exist before the first upload.
+## What free signing costs you
 
-### 5. Add repository secrets
+These are Apple's limits on a free Apple ID, not Sideloadly's:
 
-Settings → Secrets and variables → Actions → **Secrets**:
-
-| Secret | Value |
+| Limit | Value |
 | --- | --- |
-| `ASC_KEY_ID` | the Key ID from step 3 |
-| `ASC_ISSUER_ID` | the Issuer ID from step 3 |
-| `ASC_KEY_P8` | the `.p8` file, base64-encoded (see below) |
-| `TEAM_ID` | your 10-character Team ID |
+| App validity | **7 days**, then it won't launch until re-signed |
+| Apps signed at once | **3** |
+| New app IDs | ~10 per rolling week |
+| Push notifications | Not available |
+| Network Extensions, CarPlay, etc. | Not available |
+| TestFlight / App Store | Not available |
 
-Encode the key on Windows:
+Re-signing means running Sideloadly again with the phone connected. AltStore or
+SideStore can refresh over Wi-Fi instead, if weekly cable duty annoys you.
 
-```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("$HOME\Downloads\AuthKey_ABC123.p8")) | Set-Clipboard
+## Confidence notes
+
+- **iOS 27 support is the vendor's own claim.** Sideloadly's site lists iOS 7
+  through "iOS 27+". I found no independent confirmation. Check their release
+  notes before trusting it.
+- **Free-account soft-bans have been reported.** One blog reports Apple
+  soft-banning some free teams via PPQ, producing a banned-profile error. Single
+  unconfirmed source, but worth knowing the free tier isn't contractually solid.
+- **The CI side is untested.** The YAML is valid and the steps are standard, but
+  it has not been run on a macOS runner.
+
+## Costs
+
+Public repo: free. Private repo: macOS runners bill at **10× the Linux rate**, so
+2,000 free minutes ≈ **200 macOS minutes/month**. Each run here is a few minutes.
+Make the repo public if you can.
+
+## Limitations worth accepting up front
+
+- **No debugger, no breakpoints.** Build logs and test results only.
+- **No local Simulator.** It runs headless on the runner.
+- **Minutes per iteration, not seconds.** Fine for logic, slow for UI work.
+
+Keep business logic in plain Swift types (like `Greeting` in `Sources/`) and
+SwiftUI views thin — that way the untestable-locally surface stays small.
+
+If UI iteration becomes the bottleneck, a used Apple Silicon Mac mini (~$400) is
+the fix, not more CI tuning.
+
+## If you ever do get a paid account
+
+A TestFlight job — App Store Connect API key signing, `-allowProvisioningUpdates`,
+`altool` upload, no certificate export needed — is in this repo's git history at
+commit `19571df`. Recover it with:
+
 ```
-
-### 6. Add repository variables
-
-Same page, **Variables** tab:
-
-| Variable | Example |
-| --- | --- |
-| `BUNDLE_ID` | `com.yourname.yourapp` |
-| `BUNDLE_ID_PREFIX` | `com.yourname` |
-
-## Using it
-
-| Event | What runs |
-| --- | --- |
-| Pull request | Build + unit tests on simulator, no signing, no secrets |
-| Push to `main` | Tests, then archive and upload to TestFlight |
-| Tag `v*` | Same as `main` |
-| Manual run | Tests; ticks the TestFlight box only if you ask |
-
-Build numbers come from `github.run_number`, so every upload is unique —
-App Store Connect rejects duplicates.
-
-After upload, the build takes 5–15 minutes to finish processing before it
-appears in TestFlight. Install the TestFlight app on your iOS 27 iPhone and
-sign in with the same Apple ID.
-
-## Honest limitations
-
-- **No debugger, no breakpoints.** You get build logs and test results.
-- **No Simulator on your machine.** It runs on the runner, headless.
-- **Round trip is minutes, not seconds.** Fine for logic, slow for UI work.
-- **Free-tier minutes:** macOS runners bill at **10×** the Linux rate, so
-  2,000 free minutes ≈ **200 macOS minutes/month** on a private repo. Public
-  repos are free. Keep the TestFlight job off pull requests (it already is).
-
-If UI iteration becomes the bottleneck, that's the point to buy a used
-Apple Silicon Mac rather than fight this.
-
-## Local checks without a Mac
-
-Swift on Windows can typecheck non-UIKit/SwiftUI logic. Keep your business
-logic in plain Swift types (like `Greeting` here) and you can test much of it
-locally; keep SwiftUI views thin so CI is the only thing that needs Xcode.
+git show 19571df:ios-ci-starter/.github/workflows/ios.yml
+```
